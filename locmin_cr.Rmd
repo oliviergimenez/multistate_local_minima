@@ -1,0 +1,389 @@
+---
+title: "Local minima in multistate capture-recapture models"
+output:
+  word_document: default
+  html_notebook: default
+  pdf_document: default
+  html_document: default
+---
+
+## Model
+
+We consider a state-space formulation of multistate capture-recapture model. We refer to [Gimenez et al. (2007). State-space modelling of data on marked individuals. Ecological Modelling 206: 431-438](https://dl.dropboxusercontent.com/u/23160641/my-pubs/Servantyetal2010Ecology.pdf) and [Servanty et al. (2010). Assessing whether mortality is additive using marked animals: a Bayesian state-space modeling approach. Ecology 91: 1916–1923](https://dl.dropboxusercontent.com/u/23160641/my-pubs/Gimenezetal2007EcologicalModelling.pdf) for the theory.
+
+## Read in data
+
+I use female roe deer data monitored over 20 years and provided by J.-M. Gaillard. 
+Population in Trois Fontaine managed by ONCFS. Two states, with and without fawn.
+
+```{r}
+his <- matrix(c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,1,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,1,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,1,0,0,1,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,0,0,2,1,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0,0,0,0,1,
+0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,2,2,0,1,1,1,
+0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,2,1,2,0,1,
+0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,1,1,1,1,
+0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,1,
+0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,0,0,0,0,0,1,
+0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,0,0,0,0,0,1,
+0,0,0,0,0,0,0,0,0,0,0,0,2,2,0,2,1,2,0,0,1,
+0,0,0,0,0,0,0,0,0,0,0,1,0,0,2,0,1,2,2,0,1,
+0,0,0,0,0,0,0,0,0,0,0,1,2,0,0,0,0,0,0,0,1,
+0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,1,0,1,0,0,1,
+0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,2,2,1,0,0,1,
+0,0,0,0,0,0,0,0,0,0,0,2,1,0,0,0,0,0,0,0,1,
+0,0,0,0,0,0,0,0,0,0,0,2,1,2,0,1,1,1,0,0,1,
+0,0,0,0,0,0,0,0,0,0,0,2,2,0,2,2,2,2,1,0,1,
+0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,0,0,0,0,0,1,
+0,0,0,0,0,0,0,0,0,0,2,1,0,0,0,0,0,0,0,0,1,
+0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,1,
+0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,1,
+0,0,0,0,0,0,0,0,0,0,2,0,0,0,2,2,0,1,1,0,1,
+0,0,0,0,0,0,0,0,0,0,2,1,2,1,1,2,0,0,0,0,1,
+0,0,0,0,0,0,0,0,0,0,2,2,2,1,0,2,2,2,0,0,1,
+0,0,0,0,0,0,0,0,0,1,2,2,0,0,0,0,0,0,0,0,1,
+0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,1,
+0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,0,0,0,0,0,0,2,0,2,2,0,0,0,0,0,1,0,0,1,
+0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,0,0,0,0,0,1,0,0,2,2,0,2,0,0,0,0,0,0,1,
+0,0,0,0,0,0,0,2,0,0,2,1,0,0,0,0,0,0,0,0,1,
+0,0,0,0,0,0,0,2,1,1,0,2,0,0,0,0,0,0,0,0,1,
+0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,0,0,0,0,1,0,0,0,0,0,2,0,0,0,0,0,0,0,1,
+0,0,0,0,0,0,2,2,0,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,0,0,0,0,2,2,0,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,0,0,0,0,2,2,0,2,2,0,0,2,0,2,0,0,0,0,1,
+0,0,0,0,0,0,2,2,0,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,0,0,0,0,2,2,0,0,0,1,0,2,0,0,0,0,0,0,1,
+0,0,0,0,0,0,2,2,0,0,0,2,0,0,0,0,0,0,0,0,1,
+0,0,0,0,0,1,1,1,0,0,1,2,0,0,0,0,0,0,0,0,1,
+0,0,0,0,0,1,1,2,0,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,0,0,0,1,1,2,0,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,0,0,0,1,2,2,0,1,0,0,0,0,0,0,0,0,0,0,1,
+0,0,0,0,0,2,1,2,0,0,2,2,0,0,0,0,0,0,0,0,1,
+0,0,0,0,0,2,1,2,2,2,2,2,0,0,0,0,0,0,0,0,1,
+0,0,0,0,0,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,0,0,0,2,2,2,2,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,0,0,2,0,2,0,2,1,0,0,0,2,0,0,0,0,0,0,1,
+0,0,0,0,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,0,0,2,2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,0,0,2,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,0,0,2,0,2,0,0,2,2,0,0,0,0,0,0,0,0,0,1,
+0,0,0,0,2,0,2,2,2,2,2,2,0,0,0,0,0,0,0,0,1,
+0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,0,2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,0,2,2,0,2,2,0,2,0,0,0,0,0,0,0,0,0,0,1,
+0,0,0,2,2,2,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,0,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,2,2,2,1,2,0,0,0,2,2,0,1,0,0,0,0,0,0,1,
+0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,2,0,0,0,2,0,0,0,0,1,0,0,0,0,0,0,0,0,1,
+0,0,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,2,2,0,0,2,2,1,0,0,0,0,0,0,0,0,0,0,0,1,
+0,0,2,2,2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+0,2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+0,2,2,2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+0,2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+0,2,2,2,2,2,2,2,0,0,2,2,0,1,0,0,0,0,0,0,1,
+2,1,2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1),byrow=T,ncol=21)
+```
+
+## Frequentist Analysis with `Mark`
+
+Let's format the data to be analysed.
+```{r}
+his = his[,-ncol(his)] # remove last column, these are the counts
+k = ncol(his) # nb of capture occasions	
+n = nrow(his) # nb of individuals	
+out = array(dim=n)	
+for (i in 1:n){	
+	y = (his[i,] > 0) * his[i,]	
+	out[i] = paste(y,collapse="")	
+}	
+capt.hist = data.frame(ch = out)	
+```
+
+Load RMark package	
+```{r}
+library(RMark)	
+```
+
+	
+Process data and create default design matrix
+```{r}
+mstrata.processed=process.data(capt.hist,model="Multistrata")	
+mstrata.ddl=make.design.data(mstrata.processed)	
+```
+
+Define structure on parameters, all state dependent	
+```{r}
+# survival probability	
+S.site = list(formula=~stratum) 	
+# detection probability	
+p.site = list(formula=~stratum) 	
+# transition probs	
+Psi.site = list(formula=~-1+stratum:tostratum)	
+```
+
+Fit model
+```{r}
+mstrata.mod = mark(mstrata.processed,mstrata.ddl,model.parameters=list(S=S.site,p= p.site,Psi=Psi.site),output=FALSE,silent=T,delete=T)	
+```
+
+Let's have a look to the parameter estimates
+```{r}
+mstrata.mod$results$real[c(1:5,195),]
+```
+
+Now let's re-run the same model but changing the initial values
+```{r}
+nb_inits = 5 # five runs with diff inits
+set.seed(3) # to reproduce the results
+res_dev = rep(NA,nb_inits)
+res = list()
+for (i in 1:nb_inits){
+	inits = rnorm(6,0,1)
+	mstrata.sim = mark(mstrata.processed,mstrata.ddl,model.parameters=
+	list(S=S.site,p= p.site,Psi=Psi.site),output=FALSE,silent=TRUE,delete=T,initial = inits)
+	res_dev[i] = mstrata.sim$results$deviance
+	res[[i]] = mstrata.sim$results
+}
+```
+
+Display the deviance values
+```{r}
+res_dev
+```
+
+There seems to be a local minimum. Let's have a look to the estimates corresponding to the global minimum
+```{r}
+res[[2]]$real[c(1:5,195),1:4]
+```
+
+What about the estimates with a local minimum?
+```{r}
+res[[1]]$real[c(1:5,195),1:4]
+```
+
+## Graphical examination
+
+We use a graph of profile deviance to examine local minima. Let's do it for survival first:
+```{r}
+fr = mstrata.ddl$S$stratum
+ii = (fr==1)
+phi.fix = as.numeric(row.names(mstrata.ddl$S[ii,]))
+
+grid = seq(.6,0.8,0.01/2)
+#length(grid)
+dev = rep(NA,length(grid))
+ind = 1
+for (i in grid){
+	S.fix = list(formula=~stratum,fixed=list(index=phi.fix,value=i)) # survival depends on states		
+	res.fix = mark(mstrata.processed,mstrata.ddl,model.parameters=list(S=S.fix,p=p.site,Psi=Psi.site),output = FALSE,delete=T,silent=T)
+	dev[ind] = res.fix$results$deviance
+	ind = ind + 1
+}
+dev_phi = dev
+grid_phi = grid
+```
+
+Then for a transition
+```{r}
+fr = mstrata.ddl$Psi$stratum
+to = mstrata.ddl$Psi$tostratum
+ii = (fr==2 & to==1)
+psi.fix = as.numeric(row.names(mstrata.ddl$Psi[ii,])) # careful not to define Psi.fix twice
+
+grid = seq(.05,0.55,0.01)
+#length(grid)
+dev = rep(NA,length(grid))
+ind = 1
+for (i in grid){
+	Psi.fix = list(formula=~-1+stratum:tostratum,fixed=list(index=psi.fix,value=i),link='logit')	 # needs logit here, mlogit is a mess
+	res.fix = mark(mstrata.processed,mstrata.ddl,model.parameters=list(S=S.site,p=p.site,Psi=Psi.fix),output = FALSE,delete=T,silent=T)
+	dev[ind] = res.fix$results$deviance
+	ind = ind + 1
+}
+dev_psi = dev
+grid_psi = grid
+```
+
+Let's visualize the results
+```{r}
+par(mfrow=c(1,2))
+plot(grid_phi,dev_phi,type='l',xlab=expression(phiA),ylab='deviance',col='black',lwd=3)
+plot(grid_psi,dev_psi,type='l',xlab=expression(psiBA),ylab='deviance',col='black',lwd=3)
+```
+
+## Bayesian analysis with `Jags`
+
+Let us get the occasion of first capture for each individual:
+```{r}
+get.first <- function(x) min(which(x!=0))
+f <- apply(his, 1, get.first)
+```
+
+Recode the data such that 1 is seen alive in A (with fawn), 2 is seen alive in B (without fawn), 3 = not seen:
+```{r}
+his_recoded <- his
+his_recoded[his_recoded==0] <- 3
+```
+
+Then we fit a multistate model:
+```{r}
+{
+sink("state_on_survival.jags")
+cat("
+model {
+
+# -------------------------------------------------
+# Parameters:
+# phiA: survival probability site A
+# phiB: survival probability site B
+# psiAB: movement probability from site A to site B
+# psiBA: movement probability from site B to site A
+# pA: recapture probability site A
+# pB: recapture probability site B
+# -------------------------------------------------
+# States (S):
+# 1 alive at A
+# 2 alive at B
+# 3 dead
+# Observations (O):  
+# 1 seen at A 
+# 2 seen at B
+# 3 not seen
+# -------------------------------------------------
+
+# Priors
+   phiA ~ dunif(0, 1)
+   phiB ~ dunif(0, 1)
+   psiAB ~ dunif(0, 1)
+   psiBA ~ dunif(0, 1)
+   pA ~ dunif(0, 1)
+   pB ~ dunif(0, 1)
+
+# Define state-transition and observation matrices
+for (i in 1:nind){  
+   # Define probabilities of state S(t+1) given S(t)
+   for (t in f[i]:(n.occasions-1)){
+      ps[1,i,t,1] <- phiA * (1-psiAB)
+      ps[1,i,t,2] <- phiA * psiAB
+      ps[1,i,t,3] <- 1-phiA
+      ps[2,i,t,1] <- phiB * psiBA
+      ps[2,i,t,2] <- phiB * (1-psiBA)
+      ps[2,i,t,3] <- 1-phiB
+      ps[3,i,t,1] <- 0
+      ps[3,i,t,2] <- 0
+      ps[3,i,t,3] <- 1
+      
+      # Define probabilities of O(t) given S(t)
+      po[1,i,t,1] <- pA
+      po[1,i,t,2] <- 0
+      po[1,i,t,3] <- 1-pA
+      po[2,i,t,1] <- 0
+      po[2,i,t,2] <- pB
+      po[2,i,t,3] <- 1-pB
+      po[3,i,t,1] <- 0
+      po[3,i,t,2] <- 0
+      po[3,i,t,3] <- 1
+      } #t
+   } #i
+
+# Likelihood 
+for (i in 1:nind){
+   # Define latent state at first capture
+   z[i,f[i]] <- y[i,f[i]]
+   for (t in (f[i]+1):n.occasions){
+      # State process: draw S(t) given S(t-1)
+      z[i,t] ~ dcat(ps[z[i,t-1], i, t-1,])
+      # Observation process: draw O(t) given S(t)
+      y[i,t] ~ dcat(po[z[i,t], i, t-1,])
+      } #t
+   } #i
+}
+",fill = TRUE)
+sink()
+}
+```
+
+Function to create known latent states z
+```{r}
+known.state.ms <- function(ms, notseen){
+   # notseen: label for ënot seení
+   state <- ms
+   state[state==notseen] <- NA
+   for (i in 1:dim(ms)[1]){
+      m <- min(which(!is.na(state[i,])))
+      state[i,m] <- NA
+      }
+   return(state)
+   }
+```
+
+Function to create initial values for unknown z
+```{r}
+ms.init.z <- function(ch, f){
+   for (i in 1:dim(ch)[1]){ch[i,1:f[i]] <- NA}
+   states <- max(ch, na.rm = TRUE)
+   known.states <- 1:(states-1)
+   v <- which(ch==states)
+   ch[-v] <- NA
+   ch[v] <- sample(known.states, length(v), replace = TRUE)
+   return(ch)
+   }
+```
+
+Create a list of data
+```{r}
+jags.data <- list(y = his_recoded, f = f, n.occasions = dim(his_recoded)[2], nind = dim(his_recoded)[1], z = known.state.ms(his_recoded, 3))
+```
+
+
+Initial values
+```{r}
+inits <- function(){list(phiA = runif(1, 0, 1), psiAB = runif(1, 0, 1), pA = runif(1, 0, 1), z = ms.init.z(his_recoded, f))}  
+```
+
+Parameters to be monitored
+```{r}
+parameters <- c("phiA","phiB", "psiAB", "psiBA", "pA", "pB")
+```
+
+MCMC settings
+```{r}
+ni <- 5000 # nb iter
+nt <- 6 # thinning
+nb <- 1000 # burn-in
+nc <- 2 # nb chains
+```
+
+Call JAGS from R
+```{r}
+library(R2jags)
+ms <- jags(jags.data, inits, parameters, "state_on_survival.jags", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
+print(ms, digits = 3)
+```
+
+Plot of the transition to illustrate local minimum
+```{r}
+par(cex.main = 1.5, mar = c(5, 6, 4, 5) + 0.1, mgp = c(3.5, 1, 0), cex.lab = 1.5 , font.lab = 2, cex.axis = 1.3, bty = "n", las = 1)
+h <- hist(ms$BUGSoutput$sims.matrix[,7],breaks=20,freq=F,main="",xlab="",ylab="",col="gray")
+axis(1, seq(0, .60, by = .1))
+axis(2, labels = FALSE, lwd.ticks = 0)
+rug(jitter(ms$BUGSoutput$sims.matrix[,7]))
+mtext("transition B->A", side = 1, line = 2.5, cex = 1.5, font = 2)
+mtext("Density", side = 2, line = 2.5, cex = 1.5, font = 2, las = 0)
+```
+
