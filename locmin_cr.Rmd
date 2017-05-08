@@ -226,6 +226,155 @@ plot(grid_phi,dev_phi,type='l',xlab=expression(phiA),ylab='deviance',col='black'
 plot(grid_psi,dev_psi,type='l',xlab=expression(psiBA),ylab='deviance',col='black',lwd=3)
 ```
 
+## Frequentist analysis with `ADMB`
+
+Load `R2admb` package:
+```{r}
+library(R2admb)
+```
+
+Define model in ADMB language
+```{r}
+model <- 
+paste("
+DATA_SECTION
+ init_int k // Number of capture occations
+ init_int nh // Number of encouter histories
+ init_ivector e(1,nh) // Date of first capture
+ init_imatrix data(1,nh,1,k) // Data matrix
+ init_ivector eff(1,nh) // NUmber of individuals per capture history
+ init_ivector garb(1,nh) // State of first capture
+PARAMETER_SECTION
+ init_bounded_number logit_pi(-20.0,20.0,1) // Prop
+ init_bounded_number logit_phi1(-20.0,20.0,1) // Survival
+ init_bounded_number logit_phi2(-20.0,20.0,1) // Survival
+ init_bounded_number logit_det1(-20.0,20.0,1) // Capture probability
+ init_bounded_number logit_det2(-20.0,20.0,1) // Capture probability
+ init_bounded_number logit_psi1(-20.0,20.0,1) // Survival
+ init_bounded_number logit_psi2(-20.0,20.0,1) // Survival
+ objective_function_value g
+ number pi
+ number phi1
+ number phi2
+ number det1
+ number det2
+ number psi1
+ number psi2
+PROCEDURE_SECTION
+ pi = mfexp(logit_pi);
+ pi = pi/(1+pi); 
+ phi1 = mfexp(logit_phi1);
+ phi1 = phi1/(1+phi1); 
+ phi2 = mfexp(logit_phi2);
+ phi2 = phi2/(1+phi2); 
+ det1 = mfexp(logit_det1);
+ det1 = det1/(1+det1); 
+ det2 = mfexp(logit_det2);
+ det2 = det2/(1+det2); 
+ psi1 = mfexp(logit_psi1);
+ psi1 = psi1/(1+psi1); 
+ psi2 = mfexp(logit_psi2);
+ psi2 = psi2/(1+psi2); 
+ dvar_vector prop(1,3);
+ prop(1) = pi; prop(2) = 1.0 - pi; prop(3) = 0.0;
+ // B and BE are transposed:
+ // we need to have obs in rows and states in columns
+ // so that we can access rows of BE and B in the ADMB
+ // way, e.g. BE(oe)
+ dvar_matrix BE(1,3,1,3);
+ BE(1,1) = 1.0;
+ BE(1,2) = 0.0;
+ BE(1,3) = 0.0;
+ BE(2,1) = 0.0;
+ BE(2,2) = 1.0;
+ BE(2,3) = 0.0;
+ BE(3,1) = 0.0;
+ BE(3,2) = 0.0;
+ BE(3,3) = 1.0;
+ dvar_matrix B(1,3,1,3);
+ B(1,1) = det1;
+ B(1,2) = 0.0;
+ B(1,3) = 0.0;
+ B(2,1) = 0.0;
+ B(2,2) = det2;
+ B(2,3) = 0.0;
+ B(3,1) = 1.0 - det1;
+ B(3,2) = 1.0 - det2;
+ B(3,3) = 1.0;
+ dvar_matrix PHI(1,3,1,3);
+ PHI(1,1) = phi1 * (1.0 - psi1);
+ PHI(1,2) = phi1 * psi1;
+ PHI(1,3) = 1.0 - phi1;
+ PHI(2,1) = phi2 * psi2;
+ PHI(2,2) = phi2 * (1.0 - psi2);
+ PHI(2,3) = 1.0 - phi2;
+ PHI(3,1) = 0.0;
+ PHI(3,2) = 0.0;
+ PHI(3,3) = 1.0;
+ for(int i=1;i<=nh;i++){
+ 	int ei = e(i); // date of marking
+ 	int oe = garb(i); // initial obs
+ 	ivector evennt = data(i);
+ 	dvar_vector ALPHA = elem_prod(prop,BE(oe));
+ 	  for(int j=ei+1;j<=k;j++){
+ 		ALPHA = elem_prod(ALPHA*PHI,B(evennt(j)));
+ 		g -= log(sum(ALPHA))*eff(i);
+ 	}
+ }
+")
+writeLines(model,"model.tpl")
+```
+
+Specify where `ADMB` is
+```{r}
+setup_admb("/Applications/ADMBTerminal.app/admb")
+```
+
+Prepare data
+```{r}
+dat = his 
+k = ncol(dat) # nb of capture occasions	
+nh = nrow(dat) # nb of individuals	
+eff = rep(1,nh)
+fc <- NULL
+init.state <- NULL
+for (i in 1:nh){
+  temp <- 1:k
+  fc <- c(fc,min(which(dat[i,]!=0)))
+  init.state <- c(init.state,dat[i,fc[i]])
+}
+dat[dat==0] <- 3 # replace 0's of non-detection by 3's
+df = list(k=k,nh=nh,e=fc,data=dat,eff=eff,garb=init.state)
+```
+
+Fit model
+```{r}
+params <- list(logit_pi = 0,logit_phi1 = 0, logit_phi2 = 0, logit_det1 = 0, logit_det2 = 0,logit_psi1 = 0, logit_psi2 = 0) ## starting parameters
+res <- do_admb('model', data=df, params = params,verbose=TRUE)
+```
+
+Examine results
+```{r}
+summary(res)
+res$coefficients
+1/(1+exp(-res$coefficients))
+res$se
+```
+
+Fit again model, changing initial values
+```{r}
+params <- list(logit_pi = -0.5,logit_phi1 = -0.5, logit_phi2 = -0.5, logit_det1 = -0.5, logit_det2 = -0.5,logit_psi1 = -0.5, logit_psi2 = -0.5) ## starting parameters
+res <- do_admb('model', data=df, params = params,verbose=TRUE)
+```
+
+Examine results
+```{r}
+summary(res)
+res$coefficients
+1/(1+exp(-res$coefficients))
+res$se
+```
+
 ## Bayesian analysis with `Jags`
 
 Let us get the occasion of first capture for each individual:
@@ -386,4 +535,199 @@ rug(jitter(ms$BUGSoutput$sims.matrix[,7]))
 mtext("transition B->A", side = 1, line = 2.5, cex = 1.5, font = 2)
 mtext("Density", side = 2, line = 2.5, cex = 1.5, font = 2, las = 0)
 ```
+
+## Bayesian analysis with `Stan`
+
+
+```{r}
+# https://github.com/stan-dev/example-models/tree/master/BPA
+library(rstan)
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+set.seed(123)
+```
+
+Data
+```{r}
+dat = list(y=his_recoded,n_occasions=k,nind=n)
+```
+
+Model
+```{r}
+{
+sink("mstate.stan")
+cat("
+// -------------------------------------------------
+// States (S):
+// 1 alive at A
+// 2 alive at B
+// 3 dead
+// Observations (O):
+// 1 seen at A
+// 2 seen at B
+// 3 not seen
+// -------------------------------------------------
+
+functions {
+  /**
+   * Return an integer value denoting occasion of first capture.
+   * This function is derived from Stan Modeling Language
+   * User's Guide and Reference Manual.
+   *
+   * @param y         Observed values
+   * @return Occasion of first capture
+   */
+  int first_capture(int[] y_i) {
+    for (k in 1:size(y_i))
+      if (y_i[k] != 3)
+        return k;
+    return 0;
+  }
+}
+
+data {
+  int<lower=0> nind;
+  int<lower=0> n_occasions;
+  int<lower=1,upper=3> y[nind, n_occasions];
+}
+
+transformed data {
+  int<lower=0> n_occ_minus_1;
+  int<lower=0,upper=n_occasions> first[nind];
+
+  n_occ_minus_1 = n_occasions - 1;
+  for (i in 1:nind)
+    first[i] = first_capture(y[i]);
+}
+
+parameters {
+  real<lower=0,upper=1> mean_phi[2]; // Mean state-spec. survival
+  real<lower=0,upper=1> mean_psi[2]; // Mean transitions
+  real<lower=0,upper=1> mean_p[2];   // Mean state-spec. recapture
+}
+
+transformed parameters {
+  vector<lower=0,upper=1>[n_occ_minus_1] phiA;  // Survival prob. at site A
+  vector<lower=0,upper=1>[n_occ_minus_1] phiB;  // Survival prob. at site B
+  vector<lower=0,upper=1>[n_occ_minus_1] psiAB; // Movement prob. from site A to site B
+  vector<lower=0,upper=1>[n_occ_minus_1] psiBA; // Movement prob. from site B to site A
+  vector<lower=0,upper=1>[n_occ_minus_1] pA;    // Recapture prob. at site A
+  vector<lower=0,upper=1>[n_occ_minus_1] pB;    // Recapture prob. at site B
+  simplex[3] ps[3, nind, n_occ_minus_1];
+  simplex[3] po[3, nind, n_occ_minus_1];
+
+  // Constraints
+  for (t in 1:n_occ_minus_1) {
+    phiA[t] = mean_phi[1];
+    phiB[t] = mean_phi[2];
+    psiAB[t] = mean_psi[1];
+    psiBA[t] = mean_psi[2];
+    pA[t] = mean_p[1];
+    pB[t] = mean_p[2];
+  }
+
+  // Define state-transition and observation matrices
+  for (i in 1:nind) {
+    // Define probabilities of state S(t+1) given S(t)
+    for (t in 1:(n_occasions - 1)) {
+      ps[1, i, t, 1] = phiA[t] * (1.0 - psiAB[t]);
+      ps[1, i, t, 2] = phiA[t] * psiAB[t];
+      ps[1, i, t, 3] = 1.0 - phiA[t];
+      ps[2, i, t, 1] = phiB[t] * psiBA[t];
+      ps[2, i, t, 2] = phiB[t] * (1 - psiBA[t]);
+      ps[2, i, t, 3] = 1.0 - phiB[t];
+      ps[3, i, t, 1] = 0.0;
+      ps[3, i, t, 2] = 0.0;
+      ps[3, i, t, 3] = 1.0;
+
+      // Define probabilities of O(t) given S(t)
+      po[1, i, t, 1] = pA[t];
+      po[1, i, t, 2] = 0.0;
+      po[1, i, t, 3] = 1.0 - pA[t];
+      po[2, i, t, 1] = 0.0;
+      po[2, i, t, 2] = pB[t];
+      po[2, i, t, 3] = 1.0 - pB[t];
+      po[3, i, t, 1] = 0.0;
+      po[3, i, t, 2] = 0.0;
+      po[3, i, t, 3] = 1.0;
+    }
+  }
+}
+
+model {
+  real acc[3];
+  vector[3] gamma[n_occasions];
+
+  // Priors
+  // Uniform priors are implicitly defined.
+  //  mean_phi ~ uniform(0, 1);
+  //  mean_psi ~ uniform(0, 1);
+  //  mean_p ~ uniform(0, 1);
+
+  // Likelihood
+  // Forward algorithm derived from Stan Modeling Language
+  // User's Guide and Reference Manual
+  for (i in 1:nind) {
+    if (first[i] > 0) {
+      for (k in 1:3)
+        gamma[first[i], k] = (k == y[i, first[i]]);
+
+      for (t in (first[i] + 1):n_occasions) {
+        for (k in 1:3) {
+          for (j in 1:3)
+            acc[j] = gamma[t - 1, j] * ps[j, i, t - 1, k]
+                    * po[k, i, t - 1, y[i, t]];
+          gamma[t, k] = sum(acc);
+        }
+      }
+      target += log(sum(gamma[n_occasions]));
+    }
+  }
+}
+",fill = TRUE)
+sink()
+}
+```
+
+Initial values
+```{r}
+inits <- function() list(mean_phi = runif(2, 0, 1),
+                         mean_psi = runif(2, 0, 1),
+                         mean_p = runif(2, 0, 1))
+```
+
+Parameters monitored
+```{r}
+params <- c("mean_phi", "mean_psi", "mean_p")
+```
+
+MCMC settings
+```{r}
+ni <- 5000
+nt <- 6
+nb <- 1000
+nc <- 2
+```
+
+Call Stan from R
+```{r}
+ms <- stan("mstate.stan",
+           data = dat, init = inits, pars = params,
+           chains = nc, iter = ni, warmup = nb, thin = nt,
+           seed = 1,
+           open_progress = FALSE)
+print(ms, digits = 3)
+```
+
+Plot of the transition to illustrate local minimum
+```{r}
+par(cex.main = 1.5, mar = c(5, 6, 4, 5) + 0.1, mgp = c(3.5, 1, 0), cex.lab = 1.5 , font.lab = 2, cex.axis = 1.3, bty = "n", las = 1)
+h <- hist(ms@sim$samples[[1]]$`mean_psi[2]`,breaks=20,freq=F,main="",xlab="",ylab="",col="gray")
+axis(1, seq(0, .60, by = .1))
+axis(2, labels = FALSE, lwd.ticks = 0)
+rug(jitter(ms@sim$samples[[1]]$`mean_psi[2]`))
+mtext("transition B->A", side = 1, line = 2.5, cex = 1.5, font = 2)
+mtext("Density", side = 2, line = 2.5, cex = 1.5, font = 2, las = 0)
+```
+
 
